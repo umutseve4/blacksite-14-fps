@@ -22,7 +22,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # enablement lets the workflow turn Pages on itself, so publishing does
+      # not depend on someone remembering to flip a switch in Settings.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - name: refuse to publish a broken build
         run: node --experimental-vm-modules scripts/syntax-check.mjs
       - uses: actions/upload-pages-artifact@v3
