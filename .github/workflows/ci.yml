@@ -36,7 +36,7 @@ jobs:
         run: node --test tests/logic.test.mjs
 
   browser:
-    name: headless chromium smoke test (25 checks)
+    name: headless chromium smoke test (26 checks)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -63,7 +63,7 @@ jobs:
             echo "::error title=smoke test failed::$body"
           fi
           exit $code
-      # The shadow probe reports two numbers that decide whether the sun is
+      # The shadow probe reports the numbers that decide whether the sun is
       # doing anything at all. Artifacts cannot be pulled back through the API,
       # so those lines are republished as a notice and read from the run.
       - name: publish the measured lines
@@ -99,7 +99,7 @@ jobs:
           echo "browser checks:   $smoke"
           # A green pipeline earned by deleting checks is not a green pipeline.
           test "$logic" -ge 131
-          test "$smoke" -ge 25
+          test "$smoke" -ge 26
 
   assets:
     name: the repository really is asset-free
