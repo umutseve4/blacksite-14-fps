@@ -1,0 +1,14 @@
+{
+  "name": "blacksite-14",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zero-asset browser FPS built with Three.js. Every texture, sound and level piece is generated at load time.",
+  "scripts": {
+    "test": "node --test tests/logic.test.mjs",
+    "check": "node --experimental-vm-modules scripts/syntax-check.mjs",
+    "smoke": "node tests/smoke.mjs",
+    "serve": "node scripts/serve.mjs"
+  },
+  "license": "MIT"
+}

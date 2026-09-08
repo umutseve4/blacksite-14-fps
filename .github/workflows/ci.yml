@@ -1,0 +1,76 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parse:
+    name: every source file parses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --experimental-vm-modules scripts/syntax-check.mjs
+
+  logic:
+    name: gameplay logic (33 tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: run the deterministic simulation tests
+        run: node --test tests/logic.test.mjs
+
+  browser:
+    name: headless chromium smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: install playwright and a pinned three
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.47.2 three@0.169.0
+          npx playwright install --with-deps chromium
+      - name: boot the game in a real browser
+        run: node tests/smoke.mjs
+      - name: upload the frame it rendered
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshot
+          path: artifacts/
+          if-no-files-found: warn
+
+  honesty:
+    name: assertions were not deleted
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: count assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          logic=$(grep -c 'assert\.' tests/logic.test.mjs)
+          smoke=$(grep -c '^  check(' tests/smoke.mjs || true)
+          echo "logic assertions: $logic"
+          echo "browser checks:   $smoke"
+          # A green pipeline earned by deleting checks is not a green pipeline.
+          test "$logic" -ge 90
+          test "$smoke" -ge 10
