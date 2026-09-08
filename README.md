@@ -19,7 +19,7 @@
 
 ## What it is
 
-A single-player wave shooter that runs on a URL. No install, no download, no loading a 40 GB package. The entire game is 3,864 lines of JavaScript and a 121-line `index.html`. It ships **not one image, audio, or model file**. The concrete, the sand, the painted metal, the gunmetal on your weapon, the muzzle flash, the bullet decals, the rifle report, the shell hitting the floor: all of it is computed in the first second, in your browser, from a seed.
+A single-player wave shooter that runs on a URL. No install, no download, no loading a 40 GB package. The entire game is 4,236 lines of JavaScript and a 121-line `index.html`. It ships **not one image, audio, or model file**. The concrete, the sand, the painted metal, the gunmetal on your weapon, the muzzle flash, the bullet decals, the rifle report, the shell hitting the floor: all of it is computed in the first second, in your browser, from a seed.
 
 Clone it, open `index.html` through any static server, and it works. The one thing it does fetch is the Three.js library itself, pulled from a CDN by an import map, and the browser test serves that from `node_modules` instead and asserts that nothing else leaves the machine.
 
@@ -65,7 +65,7 @@ Most browser graphics demos cannot be tested, so they are not. This one splits i
 
 **26 checks in headless Chromium** boot the real game, deploy, capture the mouse, fire, reload, switch weapons and resize, asserting that the render loop advances, that the GPU issues draw calls, that ammunition is consumed, that the rounds which left the magazine match the rounds the fire clock counted, that nothing fails to load, that nothing escapes to the network, and that no console error occurs. It deliberately **never asserts a frame rate**: CI renders through SwiftShader on a CPU, so an fps threshold would measure the runner and not the game. Every wait is written as "advance this many frames, up to a generous ceiling", so a slow runner takes longer and still passes, while a stalled loop fails.
 
-Those two numbers are not decoration. A fourth CI job re-counts them on every push and fails if either drops below its floor, so this section cannot drift away from the suite it describes. A green pipeline earned by deleting checks is not a green pipeline. A fifth job walks the tracked file list and fails if a single image, audio, model or font file is ever committed, so the claim at the top of this page stays enforced rather than remembered.
+Those two numbers are not decoration. A fourth CI job re-counts them on every push and fails if either drops below its floor, so this section cannot drift away from the suite it describes. A green pipeline earned by deleting checks is not a green pipeline. The same job recounts the two size figures at the top of this page. A fifth job walks the tracked file list and fails if a single image, audio, model or font file is ever committed, so the claim at the top of this page stays enforced rather than remembered.
 
 Those tests found six real bugs, each of which would have been nearly invisible by eye:
 
