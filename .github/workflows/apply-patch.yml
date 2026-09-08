@@ -1,0 +1,51 @@
+name: apply patch
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [apply-patch]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: apply the reviewed patch
+        run: python3 tools/fix-tonemap.py
+
+      - name: every source file still parses
+        run: node --experimental-vm-modules scripts/syntax-check.mjs
+
+      - name: the simulation tests still pass
+        run: node --test tests/logic.test.mjs
+
+      - name: no assertion was lost
+        shell: bash
+        run: |
+          set -euo pipefail
+          logic=$(grep -c 'assert\.' tests/logic.test.mjs)
+          smoke=$(grep -c '^  check(' tests/smoke.mjs)
+          echo "logic assertions: $logic"
+          echo "browser checks:   $smoke"
+          test "$logic" -ge 131
+          test "$smoke" -ge 20
+
+      - name: drop the applier
+        run: rm -rf tools
+
+      - name: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: encode sRGB once, not twice' -m 'The AgX sigmoid output is display-referred: the transform bakes roughly a 2.2 gamma into its result. agx() returned that directly and the shader then ran a second, manual sRGB encode on the way to the framebuffer. Encoding twice lifted the entire image into the top half of the range. A 0.5% linear shadow displayed at 0.269 instead of 0.025, and photographic mid grey at 0.738 instead of 0.504, so the game had no shadows and no contrast. It looked like it had been shot through milk.' -m 'agx() now ends with pow(col, 2.2), which returns it to linear, and the encode at the bottom of main() is the only encode in the chain. The transform moved to src/render/tonemap.js as plain numbers; the shader injects agxGlsl() and the tests call agxJs(), both built from the same constants, so they cannot drift apart.' -m 'Every constant that acts after agx() was tuned by eye in display space and therefore had to move with it: lift divided by 12.92, gain raised to 2.2, the vignette raised from 0.13 to 0.265 so the corner still lands at 0.87 on screen, and the damage tint converted the same way. Grain moved to after the encode, because 0.018 of noise added in linear light sits two stops above the shadows and turns them to speckle.' -m 'No check in this repo had ever looked at the content of a rendered frame, which is how a shader bug this loud shipped green. Six tests now assert the transform itself: mid grey near 0.5, deep shadow under 0.08, black still black, a spread above 0.88 across the visible range, monotonic across the latitude AgX claims and clamping above it, and agx() returning linear rather than encoded light. Assertions went from 117 to 131.'
+          git push
