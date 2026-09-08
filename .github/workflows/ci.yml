@@ -100,6 +100,20 @@ jobs:
           # A green pipeline earned by deleting checks is not a green pipeline.
           test "$logic" -ge 131
           test "$smoke" -ge 26
+      # The opening paragraph of the README states how big the game is. That is
+      # a measurement too, and it had already drifted once, so it is recounted
+      # here rather than trusted.
+      - name: the size claims in the README are true
+        shell: bash
+        run: |
+          set -euo pipefail
+          js=$(find src -name '*.js' -print0 | xargs -0 cat | wc -l)
+          html=$(wc -l < index.html)
+          pretty=$(echo "$js" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1,\2/;ta')
+          echo "src javascript lines: $pretty"
+          echo "index.html lines:     $html"
+          grep -qF "$pretty lines of JavaScript" README.md
+          grep -qF "$html"'-line `index.html`' README.md
 
   assets:
     name: the repository really is asset-free
