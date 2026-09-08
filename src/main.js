@@ -769,6 +769,7 @@ export class Game {
     let occluded = 0;
     let clear = 0;
     let mirror = 0;
+    let noSun = 0;
     let exposure = 1;
     try {
       this.skyRig.update([mid.x, 0, mid.z]);
@@ -780,6 +781,17 @@ export class Game {
         caster.visible = true;
         if (clear < 0.97) break;
       }
+      // The floor of the measurement: this same patch, caster gone, sun at
+      // zero. No shadow can ever be darker than that, so the distance from
+      // clear to noSun is the whole prize and occluded says how much of it
+      // the shadow map collects.
+      const sunLight = this.skyRig.sun;
+      const sunAt = sunLight.intensity;
+      caster.visible = false;
+      sunLight.intensity = 0;
+      noSun = sample(dark);
+      sunLight.intensity = sunAt;
+      caster.visible = true;
       occluded = sample(dark);
       mirror = sample(lit);
     } finally {
@@ -803,6 +815,9 @@ export class Game {
       ratio: Number((occluded / Math.max(1e-6, clear)).toFixed(4)),
       mirror: Number(mirror.toFixed(4)),
       mirrorRatio: Number((occluded / Math.max(1e-6, mirror)).toFixed(4)),
+      noSun: Number(noSun.toFixed(4)),
+      sunShare: Number(((clear - noSun) / Math.max(1e-6, clear)).toFixed(4)),
+      efficiency: Number(((clear - occluded) / Math.max(1e-6, clear - noSun)).toFixed(4)),
     };
   }
 

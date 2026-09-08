@@ -246,6 +246,13 @@ try {
       : 'probe did not run'
   );
   check(
+    'the shadow removes most of the sunlight it stands in front of',
+    probe.ok && probe.efficiency > 0.7,
+    probe.ok
+      ? `sun is ${(probe.sunShare * 100).toFixed(1)}% of the light here, shadow removes ${(probe.efficiency * 100).toFixed(1)}% of it (noSun ${probe.noSun})`
+      : 'probe did not run'
+  );
+  check(
     'the shaded patch is darker than the matching patch on the sun side',
     probe.ok && probe.mirrorRatio < 0.95,
     probe.ok
