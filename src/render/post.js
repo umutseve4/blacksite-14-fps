@@ -4,6 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { agxGlsl } from './tonemap.js';
 
 /**
  * Final image pass.
@@ -14,6 +15,13 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
  * saturated colour toward the primaries and gives the orange-and-teal look that
  * reads as "game engine demo"; AgX desaturates as it clips, like film, which is
  * what a modern military shooter's image looks like.
+ *
+ * The AgX transform itself is generated from src/render/tonemap.js so the
+ * shader and the unit tests are built from one set of numbers. agx() hands
+ * back LINEAR light; the sRGB encode at the bottom of main() is the only
+ * encode in the chain. Everything between those two points, the grade, the
+ * damage tint and the vignette, is therefore expressed in linear light, which
+ * is why those constants do not look like the values you would pick by eye.
  */
 const FinalShader = {
   uniforms: {
@@ -21,14 +29,19 @@ const FinalShader = {
     uExposure: { value: 1.0 },
     uGrain: { value: 0.018 },
     uCA: { value: 0.30 },
-    uVignette: { value: 0.13 },
+    // 0.87 displayed at the corner, which is 0.87^2.2 in linear light.
+    uVignette: { value: 0.265 },
     uSharpen: { value: 0.16 },
     uTime: { value: 0 },
     uResolution: { value: new THREE.Vector2(1, 1) },
     uHurt: { value: 0 },
     uSat: { value: 1.02 },
-    uLift: { value: new THREE.Vector3(0.004, 0.006, 0.012) },
-    uGain: { value: new THREE.Vector3(1.015, 1.0, 0.978) },
+    // Lift was 0.004/0.006/0.012 displayed; below 0.0031308 the sRGB
+    // curve is linear with slope 12.92, so the linear values are those
+    // divided by 12.92. Gain was 1.015/1.0/0.978 displayed, so linear
+    // is those raised to 2.2. Same cool shadow, same warm-neutral gain.
+    uLift: { value: new THREE.Vector3(0.00031, 0.00046, 0.00093) },
+    uGain: { value: new THREE.Vector3(1.0334, 1.0, 0.9522) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -42,42 +55,9 @@ const FinalShader = {
     uniform vec3 uLift, uGain;
     varying vec2 vUv;
 
-    // ---- AgX (Troy Sobotka's transform, minimal polynomial fit) -------------
-    const mat3 AGX_IN = mat3(
-      0.8424790622, 0.0423282423, 0.0423756549,
-      0.0784336000, 0.8784686365, 0.0784336000,
-      0.0792237451, 0.0791661275, 0.8791429738);
-    const mat3 AGX_OUT = mat3(
-       1.1968790051, -0.0528968518, -0.0529716355,
-      -0.0980208811,  1.1519031299, -0.0980434501,
-      -0.0990297441, -0.0989611768,  1.1510736726);
-
-    vec3 agxContrast(vec3 x) {
-      vec3 x2 = x * x;
-      vec3 x4 = x2 * x2;
-      return  15.5     * x4 * x2
-            - 40.14    * x4 * x
-            + 31.96    * x4
-            -  6.868   * x2 * x
-            +  0.4298  * x2
-            +  0.1191  * x
-            -  0.00232;
-    }
-
-    vec3 agx(vec3 col) {
-      const float MIN_EV = -12.47393;
-      const float MAX_EV = 4.026069;
-      col = AGX_IN * max(col, vec3(0.0));
-      col = clamp(log2(max(col, 1e-10)), MIN_EV, MAX_EV);
-      col = (col - MIN_EV) / (MAX_EV - MIN_EV);
-      col = agxContrast(col);
-      // "punchy" look: slight power + saturation restore, then back to linear
-      vec3 luma = vec3(dot(col, vec3(0.2126, 0.7152, 0.0722)));
-      col = mix(luma, col, 1.28);
-      col = pow(max(col, vec3(0.0)), vec3(1.0, 0.98, 0.99));
-      col = AGX_OUT * col;
-      return max(col, vec3(0.0));
-    }
+    // ---- AgX (Troy Sobotka's transform, minimal polynomial fit) ----------
+    // Generated from src/render/tonemap.js. Returns linear light.
+    ${agxGlsl()}
 
     float hash13(vec3 p) {
       p = fract(p * 0.1031);
@@ -121,23 +101,30 @@ const FinalShader = {
       // Damage: desaturate and push red at the edges.
       if (uHurt > 0.0) {
         vec3 grey = vec3(dot(col, vec3(0.299, 0.587, 0.114)));
-        col = mix(col, mix(grey, vec3(0.42, 0.02, 0.015), 0.55), uHurt * (0.30 + r2 * 1.5));
+        // vec3(0.42, 0.02, 0.015) displayed, in linear light.
+        col = mix(col, mix(grey, vec3(0.147, 0.00155, 0.00116), 0.55), uHurt * (0.30 + r2 * 1.5));
       }
 
-      // Vignette — cos^4 falloff, the shape a real lens actually has.
+      // Vignette, cos^4 falloff, the shape a real lens actually has.
       float v = 1.0 - uVignette * pow(r2 * 2.0, 1.35);
       col *= clamp(v, 0.0, 1.0);
 
-      // Grain, scaled down in highlights the way sensor noise behaves.
+      // The one and only sRGB encode: agx() returned linear light and this
+      // pass writes to the default framebuffer.
+      col = clamp(col, 0.0, 1.0);
+      vec3 lo = col * 12.92;
+      vec3 hi = 1.055 * pow(col, vec3(1.0 / 2.4)) - 0.055;
+      col = mix(hi, lo, step(col, vec3(0.0031308)));
+
+      // Grain last, in display space. Sensor noise is what you see, not what
+      // the lens delivered; 0.018 added in linear light would sit two stops
+      // above the shadows and turn them to speckle. Still scaled down in the
+      // highlights, the way a real sensor behaves.
       float n = hash13(vec3(gl_FragCoord.xy, floor(uTime * 60.0))) - 0.5;
       float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
       col += n * uGrain * (1.0 - lum * 0.75);
 
-      col = clamp(col, 0.0, 1.0);
-      // Manual sRGB encode: this pass writes to the default framebuffer.
-      vec3 lo = col * 12.92;
-      vec3 hi = 1.055 * pow(col, vec3(1.0 / 2.4)) - 0.055;
-      gl_FragColor = vec4(mix(hi, lo, step(col, vec3(0.0031308))), 1.0);
+      gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
     }
   `,
 };
@@ -159,7 +146,7 @@ export function buildComposer(renderer, scene, camera, viewScene, viewCamera, qu
   composer.addPass(new RenderPass(scene, camera));
 
   // The weapon is rendered by a second camera with its own near plane so it
-  // can never clip into a wall — the standard FPS "viewmodel pass".
+  // can never clip into a wall, the standard FPS "viewmodel pass".
   const vmPass = new RenderPass(viewScene, viewCamera);
   vmPass.clear = false;
   vmPass.clearDepth = true;
@@ -181,7 +168,7 @@ export function buildComposer(renderer, scene, camera, viewScene, viewCamera, qu
   let smaa = null;
   if (quality.smaa) {
     // SMAA is an edge-detection filter that expects a perceptually encoded
-    // image, so it goes last — after the final pass has written sRGB.
+    // image, so it goes last, after the final pass has written sRGB.
     smaa = new SMAAPass(size.x * pr, size.y * pr);
     final.renderToScreen = false;
     composer.addPass(smaa);

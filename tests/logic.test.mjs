@@ -18,6 +18,10 @@ import {
 import { PROPS, collisionBoxes, SPAWN, BOT_SPAWNS, AMMO_CRATES, ARENA } from '../src/core/level.js';
 import { STATE, AI_TUNING, canSee, tickBot, makeBot, damageBot } from '../src/core/ai.js';
 import { Trigger } from '../src/core/trigger.js';
+import {
+  agxJs, displayValue, encodeSrgb, agxGlsl,
+  AGX_IN, AGX_OUT, AGX_CONTRAST, OUTPUT_GAMMA, MIN_EV, MAX_EV,
+} from '../src/render/tonemap.js';
 import { concrete, sand, gunMetal, heightToNormal, bulletDecal, radialSprite } from '../src/core/texgen.js';
 
 const PLAYER_R = 0.34;
@@ -552,4 +556,71 @@ test('clamp and lerp behave', () => {
   assert.equal(clamp(5, 0, 1), 1);
   assert.equal(clamp(-5, 0, 1), 0);
   assert.equal(lerp(0, 10, 0.25), 2.5);
+});
+
+// ---- tone mapping --------------------------------------------------------
+// A fragment shader cannot be run from node, so the transform is defined as
+// numbers in src/render/tonemap.js and the shader is generated from them.
+// These tests are the only thing standing between the game and another
+// picture nobody looked at.
+
+test('the tone map lands mid grey where mid grey belongs', () => {
+  // 0.18 linear is the photographic mid grey. It must display near 0.5.
+  // Before the double-encode fix it displayed at 0.738, which is what made
+  // the whole image look washed out.
+  const [r, g, b] = displayValue(0.18);
+  for (const v of [r, g, b]) {
+    assert.ok(Math.abs(v - 0.5) < 0.03, `mid grey displayed at ${v.toFixed(3)}`);
+  }
+});
+
+test('shadows stay dark', () => {
+  // 0.5% linear is a deep shadow. sRGB alone would put it at 0.059; AgX pulls
+  // it a little further down. It must not sit anywhere near the 0.269 the
+  // double encode produced.
+  const [, g] = displayValue(0.005);
+  assert.ok(g < 0.08, `deep shadow displayed at ${g.toFixed(3)}`);
+});
+
+test('black is black and the range is actually used', () => {
+  const black = displayValue(0.0);
+  for (const v of black) assert.equal(v, 0, 'black must stay black');
+  const bright = displayValue(8.0)[1];
+  const dark = displayValue(0.005)[1];
+  // The spread across the visible range was 0.718 when encoded twice.
+  assert.ok(bright - dark > 0.88, `spread of only ${(bright - dark).toFixed(3)}`);
+});
+
+test('the tone map is monotonic across the latitude it claims', () => {
+  // AgX clamps the log-encoded signal to [MIN_EV, MAX_EV] by design, so it is
+  // flat outside that window. Strictly increasing is only meaningful inside.
+  let prev = -1;
+  for (let ev = MIN_EV + 0.25; ev <= MAX_EV - 0.25; ev += 0.25) {
+    const v = displayValue(2 ** ev)[1];
+    assert.ok(v > prev, `not monotonic at ${ev.toFixed(2)} EV: ${v} after ${prev}`);
+    prev = v;
+  }
+  assert.ok(prev <= 1, 'the transform must not exceed the display range');
+  // And above the shoulder it holds, rather than climbing or breaking down.
+  const shoulder = displayValue(2 ** (MAX_EV + 2))[1];
+  assert.ok(Math.abs(displayValue(2 ** (MAX_EV + 8))[1] - shoulder) < 1e-9,
+    'the highlight shoulder must clamp, not keep climbing');
+});
+
+test('agx hands back linear light, not display-referred light', () => {
+  // The bug in one assertion: if agx() returned display-referred values, its
+  // output for 0.18 linear would already be near 0.5. It must be near the
+  // linear value that ENCODES to 0.5, which is about 0.21.
+  const g = agxJs([0.18, 0.18, 0.18])[1];
+  assert.ok(g < 0.30, `agx() returned ${g.toFixed(3)}, which looks encoded`);
+  assert.ok(Math.abs(encodeSrgb(g) - 0.5) < 0.03, 'and it must encode to mid grey');
+});
+
+test('the generated shader carries the same numbers as the JS reference', () => {
+  const glsl = agxGlsl();
+  assert.ok(glsl.includes(`vec3(${OUTPUT_GAMMA.toFixed(1)})`), 'output gamma missing');
+  assert.ok(glsl.includes(String(AGX_IN[0])), 'inset matrix missing');
+  assert.ok(glsl.includes(String(AGX_OUT[0])), 'outset matrix missing');
+  assert.ok(glsl.includes(String(AGX_CONTRAST[0])), 'sigmoid missing');
+  assert.equal((glsl.match(/1\.055/g) || []).length, 0, 'agx must not encode sRGB itself');
 });
