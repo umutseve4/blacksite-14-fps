@@ -54,7 +54,11 @@ function barrelMesh(lib) {
   return m;
 }
 
-/** Assembles the whole compound. Returns { group, shadowCasters }. */
+/**
+ * Assembles the whole compound. The two ground meshes are named and returned
+ * because the shadow probe has to tell a receiver from a caster, and a check
+ * that hunts for its subject by index breaks the first time a prop is added.
+ */
 export function buildWorld(scene, lib, quality) {
   const group = new THREE.Group();
   group.name = 'world';
@@ -84,6 +88,7 @@ export function buildWorld(scene, lib, quality) {
   apron.rotation.x = -Math.PI / 2;
   apron.position.y = 0.012;
   apron.receiveShadow = true;
+  apron.name = 'apron';
   group.add(apron);
 
   // ------------------------------------------------------------ props
@@ -141,5 +146,5 @@ export function buildWorld(scene, lib, quality) {
   }
 
   scene.add(group);
-  return { group, shadowCasters, byProp };
+  return { group, ground, apron, shadowCasters, byProp };
 }

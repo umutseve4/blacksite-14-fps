@@ -204,6 +204,48 @@ try {
   const alive = await page.evaluate(() => window.__game.frames);
   check('survives a resize', alive > swapped.frames, `${alive} frames`);
 
+  // 11. Shadows reach the ground. Every other statement this project makes
+  // about the sun is a flag; this one is a measurement. The probe renders the
+  // patch of ground a prop's shadow must land on and the mirror patch on the
+  // sun side, and reports both.
+  const sunState = await page.evaluate(() => {
+    const g = window.__game;
+    const sun = g.skyRig.sun;
+    return {
+      enabled: g.renderer.shadowMap.enabled,
+      castShadow: sun.castShadow,
+      mapSize: sun.shadow.map ? sun.shadow.map.width : 0,
+      extent: sun.shadow.camera.right,
+    };
+  });
+  console.log(`# sun ${JSON.stringify(sunState)}`);
+  check(
+    'the sun is set up to cast shadows',
+    sunState.enabled && sunState.castShadow,
+    `enabled=${sunState.enabled} castShadow=${sunState.castShadow}`
+  );
+  check(
+    'the sun allocated a shadow map',
+    sunState.mapSize >= 1024,
+    `${sunState.mapSize}px over a ${sunState.extent * 2} m frustum`
+  );
+
+  const probe = await page.evaluate(() => window.__game.shadowProbe());
+  console.log(`# shadow probe ${JSON.stringify(probe)}`);
+  check('the shadow probe found a usable caster', probe.ok, probe.reason || '');
+  check(
+    'the open sample is not clipped, so the comparison means something',
+    probe.ok && !probe.saturated,
+    probe.ok ? `lit ${probe.lit} at exposure ${probe.exposure}` : 'probe did not run'
+  );
+  check(
+    'a prop casts a shadow onto the ground',
+    probe.ok && probe.ratio < 0.9,
+    probe.ok
+      ? `${probe.caster} ${probe.height} m tall: shadowed ${probe.shadowed} vs lit ${probe.lit}, ratio ${probe.ratio}`
+      : 'probe did not run'
+  );
+
   // 10. No console errors anywhere in that run. Only the favicon is forgiven,
   // and only by exact URL: a broad filter would swallow a missing module.
   const real = consoleErrors.filter((t) => !t.includes('/favicon.ico'));
