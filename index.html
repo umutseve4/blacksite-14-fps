@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>BLACKSITE 14 — procedural browser FPS</title>
+<meta name="description" content="A zero-asset first-person shooter built with Three.js. Every texture, sound and level piece is generated in the browser at load time." />
+<meta name="theme-color" content="#0a0d10" />
+<meta property="og:title" content="BLACKSITE 14" />
+<meta property="og:description" content="Zero-asset browser FPS. Procedural PBR materials, synthesised weapon audio, AgX tone mapping. Three.js." />
+<meta property="og:type" content="website" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0d10'/%3E%3Cpath d='M16 6v20M6 16h20' stroke='%23e0463c' stroke-width='2'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="./style.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- ------------------------------------------------------------------ HUD -->
+<div id="hud">
+  <div id="crosshair">
+    <i id="ch-t" class="ch v"></i><i id="ch-b" class="ch v"></i>
+    <i id="ch-l" class="ch h"></i><i id="ch-r" class="ch h"></i>
+    <i id="ch-dot"></i>
+  </div>
+  <svg id="hitmarker" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M4 4 L9 9 M20 4 L15 9 M4 20 L9 15 M20 20 L15 15" />
+  </svg>
+
+  <div id="dmg-vignette"></div>
+  <div id="dmg-dirs"></div>
+
+  <div id="killfeed"></div>
+
+  <div id="top">
+    <div id="wave">WAVE 1</div>
+    <div id="score-wrap"><span>SCORE</span><b id="score">0</b></div>
+  </div>
+
+  <canvas id="minimap" width="150" height="150"></canvas>
+
+  <div id="bottom">
+    <div id="health">
+      <div id="hp-bar"><div id="hp-fill"></div></div>
+      <div id="hp-num">100</div>
+    </div>
+    <div id="ammo-wrap">
+      <div id="weapon-name">KR-7 CARBINE</div>
+      <div id="ammo-line"><b id="ammo">30</b><span id="ammo-res">210</span></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<!-- -------------------------------------------------------------- loading -->
+<div id="loading">
+  <div class="panel">
+    <h1>BLACKSITE&nbsp;<em>14</em></h1>
+    <p class="sub">generating the world — nothing is downloaded but code</p>
+    <div class="track"><div id="bar"></div></div>
+    <p id="load-status">booting</p>
+  </div>
+</div>
+
+<!-- ----------------------------------------------------------------- menu -->
+<div id="menu" class="overlay">
+  <div class="card">
+    <h1>BLACKSITE&nbsp;<em>14</em></h1>
+    <p class="tag">Zero-asset FPS. Every texture, sound and building is generated at load time.</p>
+    <button id="start" class="primary">DEPLOY</button>
+    <div class="grid">
+      <div>
+        <h3>CONTROLS</h3>
+        <ul>
+          <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</li>
+          <li><kbd>Shift</kbd> sprint · <kbd>Ctrl</kbd> crouch · <kbd>Space</kbd> jump</li>
+          <li><kbd>LMB</kbd> fire · <kbd>RMB</kbd> aim · <kbd>R</kbd> reload</li>
+          <li><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> / <kbd>Q</kbd> / wheel — weapon</li>
+          <li><kbd>Esc</kbd> pause</li>
+        </ul>
+      </div>
+      <div>
+        <h3>QUALITY <small id="q-label"></small></h3>
+        <div class="qbtns">
+          <button data-quality="low">LOW</button>
+          <button data-quality="medium">MEDIUM</button>
+          <button data-quality="high">HIGH</button>
+        </div>
+        <h3 class="mt">SENSITIVITY <small id="sens-val">100</small></h3>
+        <input id="sens" type="range" min="20" max="250" step="5" value="100" />
+      </div>
+    </div>
+    <p class="foot">Three.js r169 · AgX tone mapping · procedural PBR · WebAudio gunfire</p>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------- game over -->
+<div id="gameover" class="overlay">
+  <div class="card small">
+    <h2>YOU ARE DOWN</h2>
+    <div id="over-stats"></div>
+    <button id="retry" class="primary">REDEPLOY</button>
+  </div>
+</div>
+
+<noscript><p style="color:#ddd;font:14px system-ui;padding:2rem">This game needs JavaScript and WebGL 2.</p></noscript>
+
+<script type="module">
+  import { boot } from './src/main.js';
+  boot().catch((e) => { console.error(e); });
+</script>
+</body>
+</html>
