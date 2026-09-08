@@ -19,7 +19,7 @@
 
 ## What it is
 
-A single-player wave shooter that runs on a URL. No install, no download, no loading a 40 GB package. The entire game is 4,236 lines of JavaScript and a 121-line `index.html`. It ships **not one image, audio, or model file**. The concrete, the sand, the painted metal, the gunmetal on your weapon, the muzzle flash, the bullet decals, the rifle report, the shell hitting the floor: all of it is computed in the first second, in your browser, from a seed.
+A single-player wave shooter that runs on a URL. No install, no download, no loading a 40 GB package. The entire game is 4,246 lines of JavaScript and a 121-line `index.html`. It ships **not one image, audio, or model file**. The concrete, the sand, the painted metal, the gunmetal on your weapon, the muzzle flash, the bullet decals, the rifle report, the shell hitting the floor: all of it is computed in the first second, in your browser, from a seed.
 
 Clone it, open `index.html` through any static server, and it works. The one thing it does fetch is the Three.js library itself, pulled from a CDN by an import map, and the browser test serves that from `node_modules` instead and asserts that nothing else leaves the machine.
 
