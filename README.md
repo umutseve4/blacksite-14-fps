@@ -10,7 +10,7 @@
 [![ci](https://img.shields.io/github/actions/workflow/status/umutseve4/blacksite-14-fps/ci.yml?branch=main&style=for-the-badge&label=ci&logo=githubactions&logoColor=white&color=22C55E)](https://github.com/umutseve4/blacksite-14-fps/actions/workflows/ci.yml)
 [![three.js](https://img.shields.io/badge/three.js-r169-049EF4?style=for-the-badge&logo=threedotjs&logoColor=white)](https://threejs.org)
 [![assets](https://img.shields.io/badge/asset%20files-0-A855F7?style=for-the-badge)](#everything-is-generated)
-[![tests](https://img.shields.io/badge/assertions-114%20%2B%2020%20in%20chromium-F59E0B?style=for-the-badge&logo=nodedotjs&logoColor=white)](#the-tests-are-the-point)
+[![tests](https://img.shields.io/badge/assertions-131%20%2B%2026%20in%20chromium-F59E0B?style=for-the-badge&logo=nodedotjs&logoColor=white)](#the-tests-are-the-point)
 [![license](https://img.shields.io/badge/license-MIT-0EA5E9?style=for-the-badge)](LICENSE)
 
 </div>
@@ -61,11 +61,11 @@ Movement: sprint, crouch, slide-free but momentum-preserving strafing, and ADS t
 
 Most browser graphics demos cannot be tested, so they are not. This one splits into **pure logic** (no WebGL, no DOM) and **rendering**, which means the interesting half runs headless in CI.
 
-**114 assertions across 38 logic tests** cover: noise that tiles exactly across its period, recoil reproducibility, spring stability, rate of fire that is identical at 30 fps and 300 fps, semi-auto needing a real trigger edge, time-to-kill inside the genre window, monotonic damage falloff, collision that does not tunnel at any speed, wall sliding that preserves tangential motion, a flood fill proving every spawn point is reachable, the AI state machine, normal maps that are unit length, and a trigger latch that keeps a click alive across a dropped frame.
+**131 assertions across 45 logic tests** cover: noise that tiles exactly across its period, recoil reproducibility, spring stability, rate of fire that is identical at 30 fps and 300 fps, semi-auto needing a real trigger edge, time-to-kill inside the genre window, monotonic damage falloff, collision that does not tunnel at any speed, wall sliding that preserves tangential motion, a flood fill proving every spawn point is reachable, the AI state machine, normal maps that are unit length, and a trigger latch that keeps a click alive across a dropped frame.
 
-**20 checks in headless Chromium** boot the real game, deploy, capture the mouse, fire, reload, switch weapons and resize, asserting that the render loop advances, that the GPU issues draw calls, that ammunition is consumed, that the rounds which left the magazine match the rounds the fire clock counted, that nothing fails to load, that nothing escapes to the network, and that no console error occurs. It deliberately **never asserts a frame rate**: CI renders through SwiftShader on a CPU, so an fps threshold would measure the runner and not the game. Every wait is written as "advance this many frames, up to a generous ceiling", so a slow runner takes longer and still passes, while a stalled loop fails.
+**26 checks in headless Chromium** boot the real game, deploy, capture the mouse, fire, reload, switch weapons and resize, asserting that the render loop advances, that the GPU issues draw calls, that ammunition is consumed, that the rounds which left the magazine match the rounds the fire clock counted, that nothing fails to load, that nothing escapes to the network, and that no console error occurs. It deliberately **never asserts a frame rate**: CI renders through SwiftShader on a CPU, so an fps threshold would measure the runner and not the game. Every wait is written as "advance this many frames, up to a generous ceiling", so a slow runner takes longer and still passes, while a stalled loop fails.
 
-A fourth CI job counts the assertions and fails if that count drops. A green pipeline earned by deleting checks is not a green pipeline. A fifth job walks the tracked file list and fails if a single image, audio, model or font file is ever committed, so the claim at the top of this page stays enforced rather than remembered.
+Those two numbers are not decoration. A fourth CI job re-counts them on every push and fails if either drops below its floor, so this section cannot drift away from the suite it describes. A green pipeline earned by deleting checks is not a green pipeline. A fifth job walks the tracked file list and fails if a single image, audio, model or font file is ever committed, so the claim at the top of this page stays enforced rather than remembered.
 
 Those tests found six real bugs, each of which would have been nearly invisible by eye:
 
@@ -82,7 +82,7 @@ Those tests found six real bugs, each of which would have been nearly invisible 
 git clone https://github.com/umutseve4/blacksite-14-fps
 cd blacksite-14-fps
 
-npm test        # 33 logic tests, no browser needed
+npm test        # 45 logic tests, no browser needed
 npm run check   # parse every source file, including the WebGL ones
 npm run serve   # http://localhost:8099
 ```
@@ -114,6 +114,7 @@ Gameplay runs on a fixed 1/120 s timestep with rendering decoupled, so physics a
 - It requires WebGL 2 and pointer lock, so it is a desktop game. Mobile loads, but there is no touch control scheme.
 - Quality auto-detects from device memory and core count, and can be overridden in the menu. On a low-end machine, choose Low. The texture resolution and shadow budget change substantially.
 - It is not a networked game and there is no multiplayer code.
+- No frame rate is published anywhere in this repository. Nothing here has been measured on a named device with a stated sample size, and CI renders on a CPU, so any fps figure would describe the runner rather than the game.
 
 ## License
 
