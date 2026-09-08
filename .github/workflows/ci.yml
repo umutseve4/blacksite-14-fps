@@ -25,7 +25,7 @@ jobs:
       - run: node --experimental-vm-modules scripts/syntax-check.mjs
 
   logic:
-    name: gameplay logic (33 tests)
+    name: gameplay logic (33 tests, 103 assertions)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,8 +48,21 @@ jobs:
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.47.2 three@0.169.0
           npx playwright install --with-deps chromium
+      # Raw Actions logs cannot be read back through the API, so on failure the
+      # tail of the run is republished as an annotation. The exit code is
+      # captured first and re-raised last: no retry, no continue-on-error.
       - name: boot the game in a real browser
-        run: node tests/smoke.mjs
+        shell: bash
+        run: |
+          set +e
+          node tests/smoke.mjs 2>&1 | tee smoke.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            body=$(tail -n 60 smoke.log | sed 's/%/%25/g')
+            body=${body//$'\n'/%0A}
+            echo "::error title=smoke test failed::$body"
+          fi
+          exit $code
       - name: upload the frame it rendered
         if: always()
         uses: actions/upload-artifact@v4
@@ -74,3 +87,19 @@ jobs:
           # A green pipeline earned by deleting checks is not a green pipeline.
           test "$logic" -ge 90
           test "$smoke" -ge 10
+
+  assets:
+    name: the repository really is asset-free
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: refuse any committed media file
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=$(git ls-files | grep -Ei '\.(png|jpe?g|gif|webp|bmp|tga|dds|ktx2?|hdr|exr|mp3|ogg|wav|flac|m4a|gltf|glb|fbx|obj|dae|mtl|ttf|otf|woff2?)$' || true)
+          if [ -n "$found" ]; then
+            echo "::error title=asset file committed::$found"
+            exit 1
+          fi
+          echo "no image, audio, model or font file is tracked in this repository"

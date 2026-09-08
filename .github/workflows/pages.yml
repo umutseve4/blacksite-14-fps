@@ -22,11 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # enablement lets the workflow turn Pages on itself, so publishing does
-      # not depend on someone remembering to flip a switch in Settings.
+      # enablement: true was tried and the default GITHUB_TOKEN is refused
+      # ("Resource not accessible by integration"), so Pages has to be switched
+      # on once by hand: Settings > Pages > Source > GitHub Actions.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - name: refuse to publish a broken build
         run: node --experimental-vm-modules scripts/syntax-check.mjs
       - uses: actions/upload-pages-artifact@v3
