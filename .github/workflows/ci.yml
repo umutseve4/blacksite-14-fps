@@ -25,7 +25,7 @@ jobs:
       - run: node --experimental-vm-modules scripts/syntax-check.mjs
 
   logic:
-    name: gameplay logic (39 tests, 117 assertions)
+    name: gameplay logic (45 tests, 131 assertions)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,7 +85,7 @@ jobs:
           echo "logic assertions: $logic"
           echo "browser checks:   $smoke"
           # A green pipeline earned by deleting checks is not a green pipeline.
-          test "$logic" -ge 117
+          test "$logic" -ge 131
           test "$smoke" -ge 20
 
   assets:
