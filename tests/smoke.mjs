@@ -234,15 +234,22 @@ try {
   console.log(`# shadow probe ${JSON.stringify(probe)}`);
   check('the shadow probe found a usable caster', probe.ok, probe.reason || '');
   check(
-    'the open sample is not clipped, so the comparison means something',
+    'the control sample is not clipped, so the comparison means something',
     probe.ok && !probe.saturated,
-    probe.ok ? `lit ${probe.lit} at exposure ${probe.exposure}` : 'probe did not run'
+    probe.ok ? `clear ${probe.clear} at exposure ${probe.exposure}` : 'probe did not run'
   );
   check(
-    'a prop casts a shadow onto the ground',
+    'taking the prop away brightens the ground it was shading',
     probe.ok && probe.ratio < 0.9,
     probe.ok
-      ? `${probe.caster} ${probe.height} m tall: shadowed ${probe.shadowed} vs lit ${probe.lit}, ratio ${probe.ratio}`
+      ? `${probe.caster} ${probe.height} m tall, shadow ${probe.reach} m out: occluded ${probe.occluded} vs clear ${probe.clear}, ratio ${probe.ratio}`
+      : 'probe did not run'
+  );
+  check(
+    'the shaded patch is darker than the matching patch on the sun side',
+    probe.ok && probe.mirrorRatio < 0.95,
+    probe.ok
+      ? `occluded ${probe.occluded} vs mirror ${probe.mirror}, ratio ${probe.mirrorRatio}`
       : 'probe did not run'
   );
 

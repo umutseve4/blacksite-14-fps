@@ -658,6 +658,10 @@ export class Game {
    * camera: the only difference is occlusion. Every other object is hidden for
    * the duration so a second caster cannot darken the control sample.
    *
+   * The control sample is the same patch of ground with the caster hidden,
+   * so the sand's own variation cancels out. The mirror patch on the sun
+   * side is reported too, as a second and independent reading.
+   *
    * Samples are read from an sRGB target. A linear one clips bright sand at
    * 1.0 and hides the difference this exists to measure.
    */
@@ -690,6 +694,10 @@ export class Game {
       const across = Math.abs(horiz.z) * hx + Math.abs(horiz.x) * hz;
       if (reach - along < 1.0) continue;
       if (across < 0.5) continue;
+      // A shadow thrown tens of metres by something high up says little
+      // about the ground the player walks on, and it drifts towards the
+      // edge of the shadow frustum where the reading gets soft.
+      if (reach > 12) continue;
       const score = (reach - along) + (b.max.y - b.min.y);
       if (score > best) {
         best = score;
@@ -754,19 +762,28 @@ export class Game {
       return sum / (size * size) / 255;
     };
 
-    let shadowed = 0;
-    let open = 0;
+    // The control is this same square metre with the caster taken away.
+    // Comparing two different patches of ground would fold the sand's own
+    // variation into the reading; comparing a patch against itself leaves
+    // occlusion by this one prop as the only thing that changed.
+    let occluded = 0;
+    let clear = 0;
+    let mirror = 0;
     let exposure = 1;
     try {
       this.skyRig.update([mid.x, 0, mid.z]);
       for (const k of [1, 0.5, 0.25, 0.125, 0.0625]) {
         exposure = k;
         setExposure(k);
-        open = sample(lit);
-        if (open < 0.97) break;
+        caster.visible = false;
+        clear = sample(dark);
+        caster.visible = true;
+        if (clear < 0.97) break;
       }
-      shadowed = sample(dark);
+      occluded = sample(dark);
+      mirror = sample(lit);
     } finally {
+      caster.visible = true;
       setExposure(1);
       renderer.setRenderTarget(previous);
       for (const o of hidden) o.visible = true;
@@ -780,10 +797,12 @@ export class Game {
       height: Number((casterBox.max.y - casterBox.min.y).toFixed(2)),
       reach: Number(casterReach.toFixed(2)),
       exposure,
-      saturated: open >= 0.97,
-      shadowed: Number(shadowed.toFixed(4)),
-      lit: Number(open.toFixed(4)),
-      ratio: Number((shadowed / Math.max(1e-6, open)).toFixed(4)),
+      saturated: clear >= 0.97,
+      occluded: Number(occluded.toFixed(4)),
+      clear: Number(clear.toFixed(4)),
+      ratio: Number((occluded / Math.max(1e-6, clear)).toFixed(4)),
+      mirror: Number(mirror.toFixed(4)),
+      mirrorRatio: Number((occluded / Math.max(1e-6, mirror)).toFixed(4)),
     };
   }
 
