@@ -3,6 +3,8 @@
 //
 // It deliberately asserts on PROGRESS, never on frame rate: CI renders through
 // SwiftShader on a CPU, so any fps threshold would only measure the runner.
+// Every wait below is "advance n frames, up to a generous ceiling", so a slow
+// runner takes longer and still passes, while a stalled loop fails.
 //
 // Three.js is served from node_modules so the test never depends on a CDN.
 import { chromium } from 'playwright';
@@ -23,6 +25,31 @@ function check(name, ok, detail = '') {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ` \u2014 ${detail}` : ''}`);
 }
 
+// Wait until the loop has actually advanced n frames. A fixed sleep would turn
+// every later check into a frame-rate assertion, and SwiftShader on a shared CI
+// core can spend seconds on one frame. The measured cost is printed so a real
+// performance regression is still visible to a human.
+let page;
+async function advanceFrames(n, timeout = 120_000) {
+  const from = await page.evaluate(() => window.__game.frames);
+  const t = Date.now();
+  let reached = true;
+  try {
+    await page.waitForFunction(
+      ([a, want]) => window.__game.frames - a >= want,
+      [from, n],
+      { timeout, polling: 100 }
+    );
+  } catch {
+    reached = false;
+  }
+  const to = await page.evaluate(() => window.__game.frames);
+  const ms = Date.now() - t;
+  const gained = to - from;
+  console.log(`# ${gained} frames in ${ms} ms (${Math.round(ms / Math.max(1, gained))} ms/frame)`);
+  return { reached, from, to, gained, ms };
+}
+
 const server = await serve(PORT);
 const browser = await chromium.launch({
   args: [
@@ -32,7 +59,7 @@ const browser = await chromium.launch({
     '--disable-lcd-text'
   ]
 });
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 
 const consoleErrors = [];
 page.on('console', (m) => {
@@ -93,14 +120,25 @@ try {
 
   // 3. It renders continuously after deploying.
   await page.click('#start');
-  await page.waitForTimeout(300);
-  const f0 = await page.evaluate(() => window.__game.frames);
-  await page.waitForTimeout(4000);
-  const f1 = await page.evaluate(() => window.__game.frames);
-  check('render loop advances', f1 - f0 >= 5, `${f1 - f0} frames in 4s`);
+  await page.waitForFunction(() => window.__game.state === 'play', null, { timeout: 60_000 });
+  const run = await advanceFrames(5);
+  const f1 = run.to;
+  check('render loop advances', run.gained >= 5, `${run.gained} frames in ${run.ms} ms`);
 
-  const calls = await page.evaluate(() => window.__game.renderer.info.render.calls);
-  check('the GPU is actually drawing', calls > 10, `${calls} draw calls`);
+  // renderer.info is reset once per frame by the loop, so these counters cover a
+  // whole frame including every post pass, not just the last fullscreen quad.
+  // The highest of several completed frames is taken: a sample can otherwise
+  // land halfway through the frame that is being drawn right now.
+  const calls = await page.evaluate(async () => {
+    const g = window.__game;
+    let peak = 0;
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => requestAnimationFrame(() => r()));
+      peak = Math.max(peak, g.renderer.info.render.calls);
+    }
+    return peak;
+  });
+  check('the GPU is actually drawing', calls > 10, `${calls} draw calls in one frame`);
 
   // 4. Gameplay state advances: time moves, the player is inside the arena.
   const sim = await page.evaluate(() => {
@@ -121,26 +159,36 @@ try {
   // 6. Shooting works end to end: ammo drops, tracers/decals appear.
   const mag = () => page.evaluate(() => window.__game.ammo[window.__game.weaponKey].mag);
   const before = await mag();
+  const shots0 = await page.evaluate(() => window.__game.stats.shots);
   await page.mouse.move(640, 360);
   await page.mouse.down();
-  await page.waitForTimeout(700);
+  await advanceFrames(3);
   await page.mouse.up();
-  await page.waitForTimeout(400);
+  await advanceFrames(2);
   const after = await mag();
   check('firing consumes ammunition', after < before, `${before} -> ${after} rounds`);
 
-  const spent = await page.evaluate(() => window.__game.stats.shots);
+  const spent = (await page.evaluate(() => window.__game.stats.shots)) - shots0;
   check('the fire clock produced shots', spent > 0, `${spent} shots`);
+  // Every round that left the magazine has to be a round the fire clock counted.
+  // This is what catches a "fix" that drains ammo without ever shooting.
+  check('ammunition and the shot counter agree', before - after === spent, `${before - after} rounds vs ${spent} shots`);
 
   // 7. Reloading refills.
   await page.keyboard.press('KeyR');
-  await page.waitForTimeout(2600);
+  try {
+    await page.waitForFunction(
+      (floor) => window.__game.ammo[window.__game.weaponKey].mag > floor,
+      after,
+      { timeout: 120_000, polling: 100 }
+    );
+  } catch { /* reported by the check below */ }
   const reloaded = await mag();
   check('reload refills the magazine', reloaded > after, `${after} -> ${reloaded} rounds`);
 
   // 8. Weapon switching does not break the loop.
   await page.keyboard.press('Digit2');
-  await page.waitForTimeout(600);
+  await advanceFrames(2);
   const swapped = await page.evaluate(() => ({
     id: window.__game.weapon.id,
     frames: window.__game.frames
@@ -150,9 +198,9 @@ try {
 
   // 9. Resizing must not throw.
   await page.setViewportSize({ width: 900, height: 1200 });
-  await page.waitForTimeout(600);
+  await advanceFrames(2);
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.waitForTimeout(600);
+  await advanceFrames(2);
   const alive = await page.evaluate(() => window.__game.frames);
   check('survives a resize', alive > swapped.frames, `${alive} frames`);
 

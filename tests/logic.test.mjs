@@ -17,6 +17,7 @@ import {
 } from '../src/core/collide.js';
 import { PROPS, collisionBoxes, SPAWN, BOT_SPAWNS, AMMO_CRATES, ARENA } from '../src/core/level.js';
 import { STATE, AI_TUNING, canSee, tickBot, makeBot, damageBot } from '../src/core/ai.js';
+import { Trigger } from '../src/core/trigger.js';
 import { concrete, sand, gunMetal, heightToNormal, bulletDecal, radialSprite } from '../src/core/texgen.js';
 
 const PLAYER_R = 0.34;
@@ -467,6 +468,68 @@ test('a full magazine of AR fire kills a bot in a plausible number of hits', () 
   }
   assert.ok(shots >= 3 && shots <= 8, `body shots to kill at 20 m: ${shots}`);
   assert.ok(shots < w.magSize, 'one magazine must be able to kill one enemy');
+});
+
+// ------------------------------------------------------------------ trigger
+test('a click that starts and ends inside one frame is not lost', () => {
+  const t = new Trigger();
+  t.press();
+  t.release();
+  // The button is already up by the time the simulation looks at it.
+  assert.equal(t.held, false);
+  assert.equal(t.sample(), true, 'the latched press must survive the release');
+  assert.equal(t.sample(), false, 'the latch is consumed exactly once');
+});
+
+test('holding the trigger reads as pulled on every step', () => {
+  const t = new Trigger();
+  t.press();
+  for (let i = 0; i < 5; i++) assert.equal(t.sample(), true);
+  t.release();
+  assert.equal(t.sample(), false);
+});
+
+test('an untouched trigger never reports a pull', () => {
+  const t = new Trigger();
+  for (let i = 0; i < 3; i++) assert.equal(t.sample(), false);
+  t.press();
+  t.clear();
+  assert.equal(t.sample(), false, 'clear() must drop the latch as well as the hold');
+  assert.equal(t.held, false);
+});
+
+test('a dropped frame fires a semi-auto weapon exactly once', () => {
+  // This is the bug the headless run caught: press and release both landed
+  // between two frames, so the old "is the button down now" read saw nothing.
+  const t = new Trigger();
+  const clock = new FireClock(WEAPONS.dmr.rpm);
+  let now = 0;
+  let shots = 0;
+  t.press();
+  t.release();
+  for (let step = 0; step < 8; step++) {
+    now += 1 / 120;
+    shots += clock.update(now, t.sample(), false);
+  }
+  assert.equal(shots, 1, 'one click has to produce one shot, not zero and not two');
+});
+
+test('the trigger drives automatic fire at the weapon rate', () => {
+  const t = new Trigger();
+  const w = WEAPONS.ar;
+  const clock = new FireClock(w.rpm);
+  let now = 0;
+  let shots = 0;
+  t.press();
+  // One second of held fire, sampled at the fixed simulation step.
+  for (let step = 0; step < 120; step++) {
+    now += 1 / 120;
+    shots += clock.update(now, t.sample(), true);
+  }
+  const expected = w.rpm / 60;
+  assert.ok(Math.abs(shots - expected) <= 1, `${shots} shots in 1 s, expected about ${expected}`);
+  t.release();
+  assert.equal(clock.update(now + 1, t.sample(), true), 0, 'releasing must stop the gun');
 });
 
 test('clamp and lerp behave', () => {

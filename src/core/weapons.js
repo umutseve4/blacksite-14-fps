@@ -1,5 +1,9 @@
-// Weapon data. Numbers follow published MW-class envelopes (AR ~700-850 RPM,
-// ADS 230-300 ms, SMG 780-1050 RPM / ADS 175-225 ms) rather than arbitrary taste.
+// Weapon data. The numbers sit inside the ranges the genre has settled on
+// (assault rifle about 700-850 RPM, SMG about 780-1050 RPM, ADS times in the
+// 175-300 ms band) so the guns feel familiar instead of arbitrary. They are
+// design targets for this project, not measurements taken from another game.
+// What CI proves is the relationships: rate of fire independent of frame rate,
+// monotonic damage falloff, and time to kill inside a stated window.
 
 export const WEAPONS = {
   ar: {

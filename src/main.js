@@ -14,6 +14,7 @@ import { WEAPONS, WEAPON_ORDER, hFovToV } from './core/weapons.js';
 import { Spring, FireClock, makeRecoilStream, spreadDegrees, damageAt } from './core/recoil.js';
 import { clamp, lerp } from './core/rng.js';
 import { STATE } from './core/ai.js';
+import { Trigger } from './core/trigger.js';
 
 export const QUALITY = {
   low: {
@@ -68,6 +69,11 @@ export class Game {
     renderer.toneMapping = THREE.NoToneMapping;
     renderer.shadowMap.enabled = this.q.shadows;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // three.js clears renderer.info at the start of every render() call. With a
+    // post-processing chain the last call is a fullscreen quad, so the counters
+    // report a single draw call for the whole frame. Own the reset instead: the
+    // loop clears it once per frame, before the first pass runs.
+    renderer.info.autoReset = false;
     this.renderer = renderer;
 
     this.scene = new THREE.Scene();
@@ -178,6 +184,9 @@ export class Game {
   bindInput() {
     this.keys = new Set();
     this.mouse = { dx: 0, dy: 0, down: false, rdown: false };
+    // Presses are latched so a click that starts and ends inside one long
+    // frame still reaches the simulation. See src/core/trigger.js.
+    this.trigger = new Trigger();
     this.sens = Number(localStorage.getItem('bs14.sens') || 0.0022);
 
     window.addEventListener('keydown', (e) => {
@@ -200,11 +209,11 @@ export class Game {
     });
     document.addEventListener('mousedown', (e) => {
       if (document.pointerLockElement !== this.canvas) return;
-      if (e.button === 0) this.mouse.down = true;
+      if (e.button === 0) { this.mouse.down = true; this.trigger.press(); }
       if (e.button === 2) this.mouse.rdown = true;
     });
     document.addEventListener('mouseup', (e) => {
-      if (e.button === 0) this.mouse.down = false;
+      if (e.button === 0) { this.mouse.down = false; this.trigger.release(); }
       if (e.button === 2) this.mouse.rdown = false;
     });
     document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -235,6 +244,9 @@ export class Game {
   pause() {
     if (this.state !== 'play') return;
     this.state = 'paused';
+    // Drop held and latched input, otherwise the gun keeps firing on resume.
+    this.mouse.down = false;
+    this.trigger.clear();
     document.body.classList.add('paused');
     document.getElementById('menu')?.classList.add('show');
     document.exitPointerLock?.();
@@ -515,11 +527,14 @@ export class Game {
     // ---- firing
     const speed = Math.hypot(this.vel[0], this.vel[2]);
     const canFire = this.reloadT <= 0 && !sprinting && this.alive && this.state === 'play';
+    // One read per simulation step. It consumes the latch, so a click that was
+    // pressed and released inside a single long frame still pulls the trigger.
+    const triggerPulled = this.trigger.sample();
     if (canFire) {
-      const shots = this.fireClock.update(this.time, this.mouse.down, w.auto);
+      const shots = this.fireClock.update(this.time, triggerPulled, w.auto);
       for (let i = 0; i < shots; i++) this.fire();
     }
-    if (!this.mouse.down) {
+    if (!triggerPulled) {
       this.fireClock.release(this.time);
       this.shotsFired = Math.max(0, this.shotsFired - dt * 9);
     }
@@ -719,6 +734,7 @@ export async function boot() {
       }
     }
     game.frames += 1;
+    game.renderer.info.reset();
     game.render();
   }
   requestAnimationFrame(loop);
