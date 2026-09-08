@@ -692,6 +692,12 @@ export class Game {
       const hz = (b.max.z - b.min.z) * 0.5;
       const along = Math.abs(horiz.x) * hx + Math.abs(horiz.z) * hz;
       const across = Math.abs(horiz.z) * hx + Math.abs(horiz.x) * hz;
+      // The box has to be filled, not merely large. A mast passes every
+      // size test below on the strength of its cross-arms, while the part
+      // that actually blocks the sun is a 0.12 m pole. Half the sample
+      // window then lands outside the shadow and the probe reports a weak
+      // shadow that is really a badly chosen occluder.
+      if (!m.userData.solidBox) continue;
       if (reach - along < 1.0) continue;
       if (across < 0.5) continue;
       // A shadow thrown tens of metres by something high up says little

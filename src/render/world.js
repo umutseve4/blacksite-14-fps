@@ -140,6 +140,10 @@ export function buildWorld(scene, lib, quality) {
       }
     });
     mesh.userData.tag = p.tag || p.mat;
+    // Only a box prop fills its own bounding box. A mast is a 0.12 m pole
+    // with 0.9 m cross-arms: its box is mostly air, so its shadow is far
+    // thinner than the box implies. The shadow probe needs that difference.
+    mesh.userData.solidBox = p.kind === 'box';
     group.add(mesh);
     shadowCasters.push(mesh);
     byProp.set(p, mesh);
