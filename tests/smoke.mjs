@@ -40,27 +40,38 @@ page.on('console', (m) => {
 });
 page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
 
+// Anything that leaves the machine is a dependency the game claims not to have,
+// so every escaping request is recorded and asserted on at the end.
+const escaped = [];
 if (existsSync(vendor)) {
   await page.route(`${CDN}**`, async (route) => {
-    const rel = route.request().url().slice(CDN.length);
+    const url = route.request().url();
+    const rel = url.slice(CDN.length);
     try {
       const body = await readFile(join(vendor, rel));
       await route.fulfill({ body, contentType: 'text/javascript; charset=utf-8' });
     } catch {
+      escaped.push(url);
       await route.continue();
     }
   });
   console.log('# serving three from node_modules');
 }
+const failedRequests = [];
+page.on('requestfailed', (r) => failedRequests.push(`${r.url()} ${r.failure()?.errorText || ''}`));
 
 let exitCode = 0;
 try {
   await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' });
 
-  // 1. It boots at all.
+  // 1. It boots at all. The 180 s ceiling is a job-kill limit, not a target:
+  // the real number is printed so a regression in load time is visible.
+  const t0 = Date.now();
   await page.waitForSelector('#loading.done', { timeout: 180_000 });
+  const bootMs = Date.now() - t0;
   const bootError = await page.evaluate(() => window.__bootError || null);
-  check('boots without throwing', !bootError, bootError || '');
+  check('boots without throwing', !bootError, bootError || `${(bootMs / 1000).toFixed(1)}s`);
+  console.log(`# boot took ${bootMs} ms under SwiftShader`);
 
   // 2. The whole world really is generated, not stubbed.
   const built = await page.evaluate(() => {
@@ -103,7 +114,7 @@ try {
     `pos=${sim.pos.map((n) => n.toFixed(1)).join(',')}`
   );
 
-  // 5. The mouse is captured — without this the whole input path is dead.
+  // 5. The mouse is captured \u2014 without this the whole input path is dead.
   const locked = await page.evaluate(() => document.pointerLockElement === window.__game.canvas);
   check('pointer lock engages', locked, locked ? '' : 'canvas never captured the mouse');
 
@@ -145,9 +156,14 @@ try {
   const alive = await page.evaluate(() => window.__game.frames);
   check('survives a resize', alive > swapped.frames, `${alive} frames`);
 
-  // 10. No console errors anywhere in that run.
-  const real = consoleErrors.filter((t) => !/Failed to load resource|favicon|pointer lock/i.test(t));
+  // 10. No console errors anywhere in that run. Only the favicon is forgiven,
+  // and only by exact URL: a broad filter would swallow a missing module.
+  const real = consoleErrors.filter((t) => !t.includes('/favicon.ico'));
   check('no console errors', real.length === 0, real.slice(0, 3).join(' | '));
+
+  const badRequests = failedRequests.filter((t) => !t.includes('/favicon.ico'));
+  check('nothing failed to load', badRequests.length === 0, badRequests.slice(0, 3).join(' | '));
+  check('nothing reached the network', escaped.length === 0, escaped.slice(0, 3).join(' | '));
 
   await mkdir(join(root, 'artifacts'), { recursive: true });
   await page.screenshot({ path: join(root, 'artifacts', 'smoke.png') });
