@@ -498,6 +498,22 @@ test('an untouched trigger never reports a pull', () => {
   assert.equal(t.held, false);
 });
 
+test('a press latched while pausing is not fired on resume', () => {
+  const t = new Trigger();
+  t.press();
+  // pause() drops the held button and the latch.
+  t.clear();
+  // exitPointerLock has not landed yet, so this click still gets through.
+  t.press();
+  // Resume clears the latch a second time, which is the fix.
+  t.clear();
+  assert.equal(t.sample(), false, 'resume must not fire a shot nobody aimed');
+  t.press();
+  t.release();
+  assert.equal(t.sample(), true, 'a fresh press after resume still fires');
+  assert.equal(t.sample(), false, 'and it is still consumed exactly once');
+});
+
 test('a dropped frame fires a semi-auto weapon exactly once', () => {
   // This is the bug the headless run caught: press and release both landed
   // between two frames, so the old "is the button down now" read saw nothing.

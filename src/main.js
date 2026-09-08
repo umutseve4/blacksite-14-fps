@@ -227,6 +227,10 @@ export class Game {
       if (!locked && this.state === 'play') this.pause();
       else if (locked && this.state === 'paused') {
         this.state = 'play';
+        // exitPointerLock is not instantaneous. A click landing between
+        // pause() and the actual release still passes the handler guard and
+        // latches a press, so resume starts from a clean latch.
+        this.trigger.clear();
         document.body.classList.remove('paused');
         document.getElementById('menu')?.classList.remove('show');
       }
@@ -237,6 +241,7 @@ export class Game {
     this.audio.resume();
     if (this.state === 'dead') this.resetRun();
     this.state = 'play';
+    this.trigger.clear();
     document.body.classList.remove('paused');
     this.canvas.requestPointerLock?.();
   }
