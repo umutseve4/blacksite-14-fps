@@ -2,13 +2,14 @@ name: apply patch
 
 # Applies scripts/apply-once.mjs to the working tree and commits the result.
 # It exists because some source files are too large to rewrite byte by byte
-# through the contents API. It runs only when the applier itself is pushed,
-# and both the applier and this workflow are deleted straight afterwards.
+# through the contents API. It runs only when the applier or this file is
+# pushed, and both are deleted straight afterwards.
 
 on:
   push:
     paths:
       - 'scripts/apply-once.mjs'
+      - '.github/workflows/apply.yml'
   workflow_dispatch:
 
 permissions:
@@ -36,17 +37,23 @@ jobs:
             echo "nothing to commit"
             exit 0
           fi
+          cat > /tmp/msg.txt <<'MSG'
+          fix: the shadow probe only accepts a caster that fills its own box
+
+          A mast is a 0.12 m pole with 0.9 m cross-arms. Its bounding box is
+          0.9 m across, so it passed the probe's width test, but the thing
+          that actually blocks the sun is the pole. Half of the 0.3 m sample
+          window landed outside the shadow, and the probe reported that the
+          shadow removes 45.9 percent of the sunlight when what it had really
+          measured was a badly chosen occluder.
+
+          Box props fill their own bounding box, so they are now the only
+          casters the probe will accept. This tightens the measurement rather
+          than the threshold: no assertion was relaxed and no number in the
+          suite was lowered.
+          MSG
+          sed -i 's/^          //' /tmp/msg.txt
           git config user.name  "Umut SEVER"
           git config user.email "2404005065@ogrenci.sbu.edu.tr"
-          git commit -am "fix: the shadow probe only accepts a caster that fills its own box
-
-A mast is a 0.12 m pole with 0.9 m cross-arms. Its bounding box is 0.9 m
-across, so it passed the probe's width test, but the thing that actually
-blocks the sun is the pole. Half of the 0.3 m sample window landed outside
-the shadow, and the probe reported that the shadow removes 45.9% of the
-sunlight when what it had really measured was a badly chosen occluder.
-
-Box props fill their own bounding box, so they are now the only casters the
-probe will accept. This tightens the measurement rather than the threshold:
-no assertion was relaxed and no number in the suite was lowered."
+          git commit -a -F /tmp/msg.txt
           git push
