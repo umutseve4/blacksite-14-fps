@@ -56,3 +56,6 @@ for (const { file, find, replace } of edits) {
 }
 
 if (failed) process.exit(1);
+
+// The runner watches this path. This file landed one commit before the runner,
+// so nothing was listening the first time and it is re-pushed here.
